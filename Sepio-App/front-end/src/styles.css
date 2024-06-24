@@ -1,0 +1,49 @@
+/* .custom-button {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 8px; 
+    text-align: left;
+    width: 100%; 
+} */
+
+/* .search-item {
+    background-color: white;
+    color: black;
+    padding: 8px 16px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border: 1px solid #ccc; 
+} */
+
+.search-item input {
+    border: none;
+    outline: none;
+    width: 100%;
+    padding: 8px;
+}
+
+
+body, html, #root {
+    height: 100%;
+    margin: 0;
+}
+
+.app-container {
+    display: flex;
+    height: 100%;
+}
+
+.custom-sidebar {
+    height: 100vh;
+    border-right: 1px solid #ccc;
+}
+
+/* .content {
+    flex: 1;
+    padding: 16px;
+    overflow-y: auto;
+} */
+
