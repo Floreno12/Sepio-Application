@@ -1,7 +1,7 @@
 #!/bin/bash
 
 log() {
-    echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" | lolcat
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >> /var/log/sepio_updater.log
 }
 
 show_header() {
@@ -10,57 +10,94 @@ show_header() {
     echo "====================================" | lolcat
 }
 
-if ! command -v figlet &> /dev/null; then
-    echo "figlet is not installed. Installing figlet..."
-    sudo apt-get update
-    sudo apt-get install -y figlet
-fi
+SCRIPT_DIR=$(dirname "$(realpath "$0")")
+SEPIO_APP_DIR="$SCRIPT_DIR/Sepio-App"
+BACKEND_SERVICE="node-server"
+FRONTEND_SERVICE="react-build"
 
-if ! command -v lolcat &> /dev/null; then
-    echo "lolcat is not installed. Installing lolcat..."
-    sudo apt-get update
-    sudo apt-get install -y lolcat
-fi
+update_backend() {
+    log "Updating backend from Git repository..."
+    cd "$SEPIO_APP_DIR/backend"
+    git fetch origin main
+    LOCAL=$(git rev-parse HEAD)
+    REMOTE=$(git rev-parse origin/main)
+
+    if [ "$LOCAL" == "$REMOTE" ]; then
+        log "Backend is already up to date. Pulling anyway..."
+    else
+        log "New updates found for backend. Pulling updates..."
+    fi
+
+    git pull origin main
+    if [ $? -ne 0 ]; then
+        log "Error: Failed to pull updates from Git repository."
+        exit 1
+    fi
+
+    log "Installing backend dependencies..."
+    npm install
+    if [ $? -ne 0 ]; then
+        log "Error: Failed to install backend dependencies."
+        exit 1
+    fi
+}
+
+update_frontend() {
+    log "Updating frontend from Git repository..."
+    cd "$SEPIO_APP_DIR/front-end"
+    git fetch origin main
+    LOCAL=$(git rev-parse HEAD)
+    REMOTE=$(git rev-parse origin/main)
+
+    if [ "$LOCAL" == "$REMOTE" ]; then
+        log "Frontend is already up to date. Pulling anyway..."
+    else
+        log "New updates found for frontend. Pulling updates..."
+    fi
+
+    git pull origin main
+    if [ $? -ne 0 ]; then
+        log "Error: Failed to pull updates from Git repository."
+        exit 1
+    fi
+
+    log "Installing frontend dependencies..."
+    npm install
+    if [ $? -ne 0 ]; then
+        log "Error: Failed to install frontend dependencies."
+        exit 1
+    fi
+}
+
+restart_backend() {
+    log "Restarting backend service..."
+    systemctl restart $BACKEND_SERVICE
+    if [ $? -ne 0 ]; then
+        log "Error: Failed to restart backend service."
+        exit 1
+    fi
+}
+
+restart_frontend() {
+    log "Restarting frontend service..."
+    systemctl restart $FRONTEND_SERVICE
+    if [ $? -ne 0 ]; then
+        log "Error: Failed to restart frontend service."
+        exit 1
+    fi
+}
 
 show_header
 
-SCRIPT_DIR=$(dirname "$(realpath "$0")")
-SEPIO_APP_DIR="$SCRIPT_DIR/Sepio-App"
+log "Starting application update process..."
 
-log "Starting update script..."
+update_backend
+update_frontend
 
-if [ ! -d "$SEPIO_APP_DIR" ]; then
-    log "Error: Directory $SEPIO_APP_DIR does not exist."
-    exit 1
-fi
+restart_backend
+restart_frontend
 
-cd "$SEPIO_APP_DIR" || { log "Error: Failed to navigate to $SEPIO_APP_DIR."; exit 1; }
+log "Application update and service restart completed successfully."
 
-log "Pulling the latest changes from the repository..."
-git pull
-if [ $? -ne 0 ]; then
-    log "Error: Failed to pull the latest changes from the repository."
-    exit 1
-fi
 
-log "Successfully pulled the latest changes from the repository."
 
-log "Restarting the backend server..."
-sudo systemctl restart node-server.service
-if [ $? -ne 0 ]; then
-    log "Error: Failed to restart the backend server."
-    exit 1
-fi
-
-log "Backend server restarted successfully."
-
-log "Restarting the frontend build service..."
-sudo systemctl restart react-build.service
-if [ $? -ne 0 ]; then
-    log "Error: Failed to restart the frontend build service."
-    exit 1
-fi
-
-log "Frontend build service restarted successfully."
-
-log "Update script executed successfully."

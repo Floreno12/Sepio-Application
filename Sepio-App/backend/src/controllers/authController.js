@@ -1,32 +1,50 @@
-const bcrypt = require('bcryptjs');
+const { PrismaClient } = require('@prisma/client');
+const prisma = new PrismaClient();
+const { hashPassword, generate2FASecret, verifyPassword, verify2FAToken, generateQRCode } = require('../utils/authUtils');
 const jwt = require('jsonwebtoken');
-const { MySQLUser } = require('../models');
-const JWT_SECRET = ''; 
-exports.register = async (req, res) => {
-    const { username, password, role } = req.body;
 
-    try {
-        const hashedPassword = await bcrypt.hash(password, 10);
-        const user = await MySQLUser.create({ username, password: hashedPassword, role });
-        res.status(201).json(user);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
+const registerUser = async (req, res) => {
+  const { name, password } = req.body;
+  const hashedPassword = await hashPassword(password);
+  const secret2FA = generate2FASecret();
+  const otpauthUrl = authenticator.keyuri(name, 'MyApp', secret2FA);
+  const qrCode = await generateQRCode(otpauthUrl);
+
+  try {
+    const newUser = await prisma.user.create({
+      data: {
+        name,
+        password: hashedPassword,
+        secret2FA,
+      },
+    });
+    res.json({ user: newUser, qrCode });
+  } catch (error) {
+    res.status(500).json({ error: 'User creation failed' });
+  }
 };
 
-exports.login = async (req, res) => {
-    const { username, password } = req.body;
+const loginUser = async (req, res) => {
+  const { name, password, token2FA } = req.body;
+  try {
+    const user = await prisma.user.findUnique({
+      where: { name },
+    });
 
-    try {
-        const user = await MySQLUser.findOne({ where: { username } });
-
-        if (!user || !await bcrypt.compare(password, user.password)) {
-            return res.status(401).json({ error: 'Invalid credentials' });
-        }
-
-        const token = jwt.sign({ id: user.id, role: user.role }, JWT_SECRET, { expiresIn: '1h' });
-        res.json({ token });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
+    if (!user || !(await verifyPassword(password, user.password))) {
+      return res.status(401).send('Invalid credentials');
     }
+
+    if (!verify2FAToken(token2FA, user.secret2FA)) {
+      return res.status(401).send('Invalid 2FA token');
+    }
+
+    const token = jwt.sign({ id: user.id, name: user.name }, process.env.SECRET_KEY, { expiresIn: '1h' });
+    res.json({ token });
+  } catch (error) {
+    res.status(500).json({ error: 'Login failed' });
+  }
 };
+
+module.exports = { registerUser, loginUser };
+
